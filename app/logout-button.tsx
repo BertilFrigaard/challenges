@@ -2,6 +2,7 @@
 
 import { useFormStatus } from "react-dom";
 import { Spinner } from "@/app/spinner";
+import { primaryButtonClass } from "@/app/ui-classes";
 
 export function LogoutButton() {
   const { pending } = useFormStatus();
@@ -10,7 +11,7 @@ export function LogoutButton() {
     <button
       type="submit"
       disabled={pending}
-      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-base font-semibold text-background cursor-pointer transition hover:scale-98 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 sm:w-auto"
+      className={`${primaryButtonClass} w-full sm:w-auto`}
     >
       {pending && <Spinner className="size-5" />}
       {pending ? "Logging out…" : "Log out"}

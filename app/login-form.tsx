@@ -3,14 +3,12 @@
 import { useActionState } from "react";
 import { login, type LoginState } from "@/app/actions";
 import { Spinner } from "@/app/spinner";
+import { inputClass, primaryButtonClass } from "@/app/ui-classes";
 
 const messages: Record<Exclude<LoginState["status"], "idle">, string> = {
   failure: "Invalid username or password",
   error: "Something went wrong. Try again.",
 };
-
-const inputClass =
-  "min-h-11 w-full rounded-lg border border-foreground/20 bg-surface px-3 text-base text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/40";
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(login, { status: "idle" });
@@ -47,7 +45,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-base font-semibold text-background cursor-pointer transition hover:scale-98 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+        className={`${primaryButtonClass} mt-2 w-full`}
       >
         {pending && <Spinner className="size-5" />}
         {pending ? "Logging in…" : "Log in"}

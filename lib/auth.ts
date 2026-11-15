@@ -2,10 +2,9 @@ import "server-only";
 import { hash, verify } from "@node-rs/argon2";
 import { pool } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
+import { isUuid } from "@/lib/uuid";
 
 export type User = { id: string; username: string };
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Verified against when the username doesn't exist, so a login attempt takes
 // about as long either way and timing doesn't reveal which usernames exist.
@@ -34,7 +33,7 @@ export async function verifyCredentials(
 export async function getCurrentUser(): Promise<User | null> {
   const userId = await getSessionUserId();
   // Guard the uuid cast so an unexpected sub can't make Postgres throw.
-  if (!userId || !UUID_RE.test(userId)) return null;
+  if (!userId || !isUuid(userId)) return null;
 
   const { rows } = await pool.query<User>("SELECT id, username FROM users WHERE id = $1", [userId]);
   return rows[0] ?? null;
