@@ -2,11 +2,11 @@
 
 import { useActionState } from "react";
 import { login, type LoginState } from "@/app/actions";
+import { Spinner } from "@/app/spinner";
 
-const messages: Record<Exclude<LoginState["status"], "idle">, { text: string; color: string }> = {
-  success: { text: "Success", color: "text-success" },
-  failure: { text: "Invalid username or password", color: "text-error" },
-  error: { text: "Something went wrong. Try again.", color: "text-error" },
+const messages: Record<Exclude<LoginState["status"], "idle">, string> = {
+  failure: "Invalid username or password",
+  error: "Something went wrong. Try again.",
 };
 
 const inputClass =
@@ -47,13 +47,14 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 min-h-11 w-full rounded-lg bg-primary px-4 text-base font-semibold text-background transition-opacity disabled:opacity-60"
+        className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-base font-semibold text-background cursor-pointer transition hover:scale-98 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
       >
+        {pending && <Spinner className="size-5" />}
         {pending ? "Logging in…" : "Log in"}
       </button>
 
-      <p role="status" aria-live="polite" className={`min-h-6 text-base font-medium ${message?.color ?? ""}`}>
-        {message?.text}
+      <p role="status" aria-live="polite" className="min-h-6 text-base font-medium text-error">
+        {message}
       </p>
     </form>
   );

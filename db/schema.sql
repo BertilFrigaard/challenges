@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- Usernames are case-insensitive: "Bertil" and "bertil" are the same user.
+-- Usernames are case-insensitive: "User" and "user" are the same user.
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_key ON users (lower(username));
