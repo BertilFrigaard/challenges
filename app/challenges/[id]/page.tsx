@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { AddPointsButton, AddPointsProvider } from "@/app/add-points";
 import { LocalTime } from "@/app/local-time";
 import { periodLabel } from "@/app/period-label";
+import { capitalize } from "@/app/point-unit";
 import { Spinner } from "@/app/spinner";
 import { getCurrentUser } from "@/lib/auth";
 import { getChallengeDetail, type ChallengeDetail } from "@/lib/challenges";
@@ -52,7 +53,7 @@ async function ChallengeView({ params }: { params: Promise<{ id: string }> }) {
   const canAddPoints = !(c.kind === "fixed" && c.ended);
 
   return (
-    <AddPointsProvider challenges={canAddPoints ? [{ id: c.id, name: c.name }] : []}>
+    <AddPointsProvider challenges={canAddPoints ? [{ id: c.id, name: c.name, unit: c.unit }] : []}>
       <article className="flex w-full max-w-4xl min-w-0 flex-col gap-6 text-left">
         <Link
           href="/"
@@ -71,30 +72,38 @@ async function ChallengeView({ params }: { params: Promise<{ id: string }> }) {
           )}
         </header>
 
-        {canAddPoints && <AddPointsButton challengeId={c.id} challengeName={c.name} variant="labeled" />}
+        {canAddPoints && <AddPointsButton challengeId={c.id} challengeName={c.name} unit={c.unit} variant="labeled" />}
 
         <section
           aria-labelledby="chart-title"
           className="flex min-w-0 flex-col gap-3 rounded-lg border border-foreground/10 bg-surface p-3 sm:p-5"
         >
           <h2 id="chart-title" className="text-lg font-semibold">
-            {c.kind === "fixed" ? "Points over time" : "Points per period"}
+            {capitalize(c.unit.plural)} {c.kind === "fixed" ? "over time" : "per period"}
           </h2>
           {c.kind === "fixed" ? (
             <ProgressChart
               series={series}
+              unit={c.unit}
               runningTotals={c.runningTotals}
               startsAt={c.createdAt}
               endsAt={c.ended ? c.endsAt : c.now}
             />
           ) : (
-            <PeriodChart series={series} periods={c.periods} periodUnit={c.periodUnit} timeZone={c.timeZone} />
+            <PeriodChart
+              series={series}
+              unit={c.unit}
+              periods={c.periods}
+              periodUnit={c.periodUnit}
+              timeZone={c.timeZone}
+            />
           )}
         </section>
 
         <Standings
           series={series}
           scores={scores}
+          unit={c.unit}
           caption={c.kind === "periodic" ? "this period" : c.ended ? "final" : "total"}
         />
 
@@ -107,9 +116,9 @@ async function ChallengeView({ params }: { params: Promise<{ id: string }> }) {
               Delete challenge
             </h2>
             <p className="text-base text-foreground/80">
-              As the creator, you can delete this challenge with all its points, for everyone.
+              As the creator, you can delete this challenge with all its {c.unit.plural}, for everyone.
             </p>
-            <DeleteChallenge challengeId={c.id} challengeName={c.name} />
+            <DeleteChallenge challengeId={c.id} challengeName={c.name} unitPlural={c.unit.plural} />
           </section>
         )}
       </article>

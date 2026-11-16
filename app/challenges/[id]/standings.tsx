@@ -1,14 +1,18 @@
+import { unitWord } from "@/app/point-unit";
+import type { PointUnit } from "@/lib/challenges";
 import type { Series } from "./chart-colors";
 
-// Everyone ranked by points (ties share a rank). Doubles as the chart's
+// Everyone ranked by score (ties share a rank). Doubles as the chart's
 // legend, via the color swatches, and as its accessible table view.
 export function Standings({
   series,
   scores,
+  unit,
   caption,
 }: {
   series: Series[];
   scores: Record<string, number>;
+  unit: PointUnit;
   caption: string;
 }) {
   const sorted = [...series].sort(
@@ -38,7 +42,7 @@ export function Standings({
                 {s.isYou && <span className="font-normal text-foreground/70"> (you)</span>}
               </span>
               <span className="shrink-0 tabular-nums">
-                {score.toLocaleString("en-US")} <span className="sr-only">points</span>
+                {score.toLocaleString("en-US")} <span className="sr-only">{unitWord(score, unit)}</span>
               </span>
             </li>
           );

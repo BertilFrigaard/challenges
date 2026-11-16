@@ -9,15 +9,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { formatAmount } from "@/app/point-unit";
 import { Spinner } from "@/app/spinner";
 import { inputClass, primaryButtonClass, secondaryButtonClass } from "@/app/ui-classes";
+import type { PointUnit } from "@/lib/challenges";
 import { addPointsAction, type AddPointsState } from "./points-actions";
 
 // Mirrors POINTS_MAX in lib/challenges.ts (server-only).
 const POINTS_MAX = 1_000_000;
 const NOTICE_MS = 4000;
 
-type ChallengeOption = { id: string; name: string };
+type ChallengeOption = { id: string; name: string; unit: PointUnit };
 
 const OpenContext = createContext<((challengeId: string) => void) | null>(null);
 
@@ -53,9 +55,9 @@ export function AddPointsProvider({
           initialChallengeId={open.challengeId}
           onClosed={() => setOpen(null)}
           onAdded={(challengeId, amount) => {
-            const name = challenges.find((c) => c.id === challengeId)?.name ?? "the challenge";
-            const points = amount === 1 ? "1 point" : `${amount.toLocaleString()} points`;
-            setNotice({ text: `Added ${points} to ${name}.`, id: Date.now() });
+            const challenge = challenges.find((c) => c.id === challengeId);
+            const added = formatAmount(amount, challenge?.unit ?? { singular: "point", plural: "points" });
+            setNotice({ text: `Added ${added} to ${challenge?.name ?? "the challenge"}.`, id: Date.now() });
           }}
         />
       )}
@@ -78,14 +80,16 @@ export function AddPointsProvider({
   );
 }
 
-// `icon` is the compact + for cards; `labeled` is a full "Add points" button.
+// `icon` is the compact + for cards; `labeled` is a full "Add minutes" button.
 export function AddPointsButton({
   challengeId,
   challengeName,
+  unit,
   variant = "icon",
 }: {
   challengeId: string;
   challengeName: string;
+  unit: PointUnit;
   variant?: "icon" | "labeled";
 }) {
   const open = use(OpenContext);
@@ -104,7 +108,7 @@ export function AddPointsButton({
         className={`${primaryButtonClass} w-full sm:w-fit`}
       >
         {plus}
-        Add points
+        Add {unit.plural}
       </button>
     );
   }
@@ -113,8 +117,8 @@ export function AddPointsButton({
     <button
       type="button"
       onClick={() => open(challengeId)}
-      aria-label={`Add points to ${challengeName}`}
-      title="Add points"
+      aria-label={`Add ${unit.plural} to ${challengeName}`}
+      title={`Add ${unit.plural}`}
       className="relative z-10 -mt-1 -mr-1 flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-primary text-background transition hover:scale-98 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       {plus}
@@ -137,6 +141,8 @@ function AddPointsDialog({
   const amountRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState("");
   const [challengeId, setChallengeId] = useState(initialChallengeId);
+  // The title and submit button follow the selected challenge's unit.
+  const plural = (challenges.find((c) => c.id === challengeId) ?? challenges[0])?.unit.plural ?? "points";
 
   const [state, formAction, pending] = useActionState<AddPointsState, FormData>(
     async (prev, formData) => {
@@ -183,8 +189,8 @@ function AddPointsDialog({
         noValidate
         className="flex flex-col gap-5 px-4 pt-5 pb-[max(1rem,env(safe-area-inset-bottom))] text-left sm:p-6"
       >
-        <h2 id="add-points-title" className="text-xl font-semibold">
-          Add points
+        <h2 id="add-points-title" className="text-xl font-semibold break-words">
+          Add {plural}
         </h2>
 
         <label className="flex flex-col gap-1.5">
@@ -246,7 +252,7 @@ function AddPointsDialog({
           </button>
           <button type="submit" disabled={pending} className={`${primaryButtonClass} w-full sm:w-auto`}>
             {pending && <Spinner className="size-5" />}
-            {pending ? "Adding…" : "Add points"}
+            {pending ? "Adding…" : `Add ${plural}`}
           </button>
         </div>
 

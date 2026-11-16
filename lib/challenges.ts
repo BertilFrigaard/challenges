@@ -7,8 +7,13 @@ export const PARTICIPANTS_MAX = 50;
 export const PERIOD_UNITS = ["week", "month"] as const;
 export const PERIOD_COUNT_MAX = 12;
 export const POINTS_MAX = 1_000_000;
+export const UNIT_MAX = 20;
 
 export type PeriodUnit = (typeof PERIOD_UNITS)[number];
+
+// What a challenge counts, lowercase, e.g. minute / minutes.
+export type PointUnit = { singular: string; plural: string };
+export const DEFAULT_UNIT: PointUnit = { singular: "point", plural: "points" };
 
 // How a challenge runs: once until a fixed end, or in repeating
 // calendar-aligned periods (see the challenges table in db/schema.sql).
@@ -21,6 +26,7 @@ export type ChallengeSchedule =
 export type ChallengeSummary = {
   id: string;
   name: string;
+  unit: PointUnit;
   participantCount: number;
   myPoints: number;
   // Ties share a place (1, 2, 2, 4), like the standings on the challenge page.
@@ -52,6 +58,7 @@ export type ChallengeDetail = {
   id: string;
   name: string;
   description: string;
+  unit: PointUnit;
   creatorUsername: string;
   isCreator: boolean;
   createdAt: string /* ISO 8601 */;
@@ -77,6 +84,7 @@ export async function createChallenge(input: {
   creatorId: string;
   name: string;
   description: string;
+  unit: PointUnit;
   schedule: ChallengeSchedule;
   participantIds: string[];
 }): Promise<string> {
@@ -90,9 +98,9 @@ export async function createChallenge(input: {
     // it is always aligned.
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO challenges
-         (creator_id, name, description, kind, ends_at,
+         (creator_id, name, description, unit_singular, unit_plural, kind, ends_at,
           period_unit, period_count, time_zone, period_anchor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text,
+       VALUES ($1, $2, $3, $9, $10, $4, $5, $6, $7, $8::text,
                date_trunc($6, now() AT TIME ZONE $8::text)::date)
        RETURNING id`,
       [
@@ -104,6 +112,8 @@ export async function createChallenge(input: {
         s.kind === "periodic" ? s.unit : null,
         s.kind === "periodic" ? s.count : null,
         s.kind === "periodic" ? s.timeZone : null,
+        input.unit.singular,
+        input.unit.plural,
       ],
     );
     const challengeId = rows[0].id;
@@ -151,6 +161,8 @@ export async function getChallengesForUser(userId: string): Promise<ChallengeSum
   const { rows } = await pool.query<{
     id: string;
     name: string;
+    unit_singular: string;
+    unit_plural: string;
     kind: "fixed" | "periodic";
     ends_at: Date | null;
     period_end: Date | null;
@@ -165,7 +177,7 @@ export async function getChallengesForUser(userId: string): Promise<ChallengeSum
     // or within the current period of a periodic one. Every participant is
     // ranked, including those without points.
     `WITH mine AS (
-       SELECT c.id, c.name, c.kind, c.ends_at, c.created_at,
+       SELECT c.id, c.name, c.unit_singular, c.unit_plural, c.kind, c.ends_at, c.created_at,
               (c.kind = 'fixed' AND c.ends_at <= now()) AS ended,
               w.period_start, w.period_end
          FROM challenge_participants me
@@ -199,7 +211,7 @@ export async function getChallengesForUser(userId: string): Promise<ChallengeSum
               bool_or(total <> 0) OVER (PARTITION BY challenge_id) AS anyone_scored
          FROM scores
      )
-     SELECT m.id, m.name, m.kind, m.ends_at, m.period_end, m.ended,
+     SELECT m.id, m.name, m.unit_singular, m.unit_plural, m.kind, m.ends_at, m.period_end, m.ended,
             r.total AS my_points, r.place, r.tied, r.participant_count, r.anyone_scored
        FROM mine m
        JOIN ranked r ON r.challenge_id = m.id AND r.user_id = $1
@@ -214,6 +226,7 @@ export async function getChallengesForUser(userId: string): Promise<ChallengeSum
     const common = {
       id: r.id,
       name: r.name,
+      unit: { singular: r.unit_singular, plural: r.unit_plural },
       participantCount: r.participant_count,
       myPoints: r.my_points,
       place: r.place,
@@ -236,6 +249,8 @@ export async function getChallengeDetail(
     id: string;
     name: string;
     description: string;
+    unit_singular: string;
+    unit_plural: string;
     kind: "fixed" | "periodic";
     ends_at: Date | null;
     period_unit: PeriodUnit | null;
@@ -247,7 +262,7 @@ export async function getChallengeDetail(
     ended: boolean;
     now: Date;
   }>(
-    `SELECT c.id, c.name, c.description, c.kind, c.ends_at,
+    `SELECT c.id, c.name, c.description, c.unit_singular, c.unit_plural, c.kind, c.ends_at,
             c.period_unit, c.period_count, c.time_zone, c.created_at,
             u.username AS creator_username,
             c.creator_id = $2 AS is_creator,
@@ -275,6 +290,7 @@ export async function getChallengeDetail(
     id: c.id,
     name: c.name,
     description: c.description,
+    unit: { singular: c.unit_singular, plural: c.unit_plural },
     creatorUsername: c.creator_username,
     isCreator: c.is_creator,
     createdAt: c.created_at.toISOString(),

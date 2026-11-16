@@ -19,11 +19,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_key ON users (lower(usern
 -- Monday / 1st on or before creation, so period 1 is usually partial). Period
 -- k starts at (period_anchor + k * period_count units) 00:00 in time_zone, so
 -- DST and month lengths are handled by wall-clock arithmetic.
+--
+-- unit_singular / unit_plural name what is counted, stored lowercase:
+-- 'point' / 'points' by default, or e.g. 'minute' / 'minutes'.
 CREATE TABLE IF NOT EXISTS challenges (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name          text NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
   description   text NOT NULL DEFAULT '' CHECK (length(description) <= 2000),
+  unit_singular text NOT NULL
+                CHECK (length(unit_singular) BETWEEN 1 AND 20 AND unit_singular = lower(unit_singular)),
+  unit_plural   text NOT NULL
+                CHECK (length(unit_plural) BETWEEN 1 AND 20 AND unit_plural = lower(unit_plural)),
   kind          text NOT NULL CHECK (kind IN ('fixed', 'periodic')),
   ends_at       timestamptz,
   period_unit   text CHECK (period_unit IN ('week', 'month')),

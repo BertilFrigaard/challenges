@@ -3,22 +3,25 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  DEFAULT_UNIT,
   DESCRIPTION_MAX,
   NAME_MAX,
   PARTICIPANTS_MAX,
   PERIOD_COUNT_MAX,
   PERIOD_UNITS,
+  UNIT_MAX,
   createChallenge,
   existingUserIds,
   type ChallengeSchedule,
   type PeriodUnit,
+  type PointUnit,
 } from "@/lib/challenges";
 import { isUuid } from "@/lib/uuid";
 
 export type CreateChallengeState = {
   status: "idle" | "invalid" | "error";
   errors?: Partial<
-    Record<"name" | "description" | "kind" | "endsAt" | "period" | "participants", string>
+    Record<"name" | "description" | "unit" | "kind" | "endsAt" | "period" | "participants", string>
   >;
 };
 
@@ -42,6 +45,7 @@ export async function createChallengeAction(
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const kind = String(formData.get("kind") ?? "");
+  const unitKind = String(formData.get("unitKind") ?? "");
   const participantIds = [
     ...new Set(formData.getAll("participantIds").map(String).filter((id) => id !== user.id)),
   ];
@@ -51,6 +55,20 @@ export async function createChallengeAction(
   else if (name.length > NAME_MAX) errors.name = `Keep the name under ${NAME_MAX} characters.`;
   if (description.length > DESCRIPTION_MAX) {
     errors.description = `Keep the description under ${DESCRIPTION_MAX} characters.`;
+  }
+
+  let unit: PointUnit | undefined;
+  if (unitKind === "points") {
+    unit = DEFAULT_UNIT;
+  } else if (unitKind === "custom") {
+    const plural = String(formData.get("unitPlural") ?? "").trim().toLowerCase();
+    const singular = String(formData.get("unitSingular") ?? "").trim().toLowerCase();
+    if (!plural || !singular) errors.unit = "Enter the unit in plural and singular.";
+    else if (plural.length > UNIT_MAX || singular.length > UNIT_MAX) {
+      errors.unit = `Keep each under ${UNIT_MAX} characters.`;
+    } else unit = { singular, plural };
+  } else {
+    errors.unit = "Pick a unit.";
   }
 
   let schedule: ChallengeSchedule | undefined;
@@ -91,9 +109,9 @@ export async function createChallengeAction(
         errors.participants = "Some participants could not be found.";
       }
     }
-    if (Object.keys(errors).length > 0 || !schedule) return { status: "invalid", errors };
+    if (Object.keys(errors).length > 0 || !schedule || !unit) return { status: "invalid", errors };
 
-    await createChallenge({ creatorId: user.id, name, description, schedule, participantIds });
+    await createChallenge({ creatorId: user.id, name, description, unit, schedule, participantIds });
   } catch (err) {
     console.error("Creating challenge failed:", (err as Error).message);
     return { status: "error" };

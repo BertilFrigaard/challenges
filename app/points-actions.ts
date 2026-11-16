@@ -36,7 +36,7 @@ export async function addPointsAction(
     if (!added) {
       return {
         status: "invalid",
-        errors: { challengeId: "You can't add points to this challenge." },
+        errors: { challengeId: "You can't add to this challenge." },
       };
     }
   } catch (err) {

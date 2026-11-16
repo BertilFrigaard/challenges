@@ -1,7 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { RunningTotal } from "@/lib/challenges";
+import type { PointUnit, RunningTotal } from "@/lib/challenges";
 import type { Series } from "./chart-colors";
 import {
   CHART_HEIGHT,
@@ -26,11 +26,13 @@ type Row = Record<string, number>;
 // are added and stay flat in between.
 export function ProgressChart({
   series,
+  unit,
   runningTotals,
   startsAt,
   endsAt,
 }: {
   series: Series[];
+  unit: PointUnit;
   runningTotals: RunningTotal[];
   startsAt: string;
   endsAt: string;
@@ -49,7 +51,10 @@ export function ProgressChart({
   );
 
   return (
-    <div role="img" aria-label="Line chart of each player's total points over time. The standings below list the same totals.">
+    <div
+      role="img"
+      aria-label={`Line chart of each player's total ${unit.plural} over time. The standings below list the same totals.`}
+    >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--chart-grid)" />

@@ -4,6 +4,7 @@ import { AddPointsButton, AddPointsProvider } from "@/app/add-points";
 import { Countdown } from "@/app/countdown";
 import { LocalTime } from "@/app/local-time";
 import { LogoutButton } from "@/app/logout-button";
+import { formatAmount } from "@/app/point-unit";
 import { primaryButtonClass } from "@/app/ui-classes";
 import type { User } from "@/lib/auth";
 import { getChallengesForUser, type ChallengeSummary } from "@/lib/challenges";
@@ -36,7 +37,7 @@ export async function HomeScreen({ user }: { user: User }) {
           You&apos;re not in any challenges yet. Create one and invite some people.
         </p>
       ) : (
-        <AddPointsProvider challenges={active.map(({ id, name }) => ({ id, name }))}>
+        <AddPointsProvider challenges={active.map(({ id, name, unit }) => ({ id, name, unit }))}>
           <ChallengeSection title="Active" challenges={active} empty="No active challenges." />
           {ended.length > 0 && <ChallengeSection title="Ended" challenges={ended} />}
         </AddPointsProvider>
@@ -95,7 +96,7 @@ function ChallengeCard({ challenge: c }: { challenge: ChallengeSummary }) {
             {c.name}
           </Link>
         </h3>
-        {!isEnded(c) && <AddPointsButton challengeId={c.id} challengeName={c.name} />}
+        {!isEnded(c) && <AddPointsButton challengeId={c.id} challengeName={c.name} unit={c.unit} />}
       </div>
       <p className="text-base font-semibold break-words tabular-nums">{standingText(c)}</p>
       <p className="mt-auto pt-1 text-sm text-foreground/70">
@@ -126,13 +127,13 @@ function ChallengeCard({ challenge: c }: { challenge: ChallengeSummary }) {
   );
 }
 
-// "Tied 2nd of 5 · 120 pts", or "Finished 2nd of 5 · 120 pts" once ended.
+// "Tied 2nd of 5 · 120 minutes", or "Finished 2nd of 5 · 120 minutes" once ended.
 function standingText(c: ChallengeSummary): string {
   const ended = isEnded(c);
-  if (!c.anyoneScored) return ended ? "No points scored" : "No points yet";
+  if (!c.anyoneScored) return ended ? `No ${c.unit.plural} scored` : `No ${c.unit.plural} yet`;
   const tied = c.tied ? (ended ? "tied " : "Tied ") : "";
-  const points = `${c.myPoints.toLocaleString("en-US")} ${Math.abs(c.myPoints) === 1 ? "pt" : "pts"}`;
-  return `${ended ? "Finished " : ""}${tied}${ordinal(c.place)} of ${c.participantCount} · ${points}`;
+  const amount = formatAmount(c.myPoints, c.unit);
+  return `${ended ? "Finished " : ""}${tied}${ordinal(c.place)} of ${c.participantCount} · ${amount}`;
 }
 
 // 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st…

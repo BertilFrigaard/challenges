@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { PeriodTotals, PeriodUnit } from "@/lib/challenges";
+import type { PeriodTotals, PeriodUnit, PointUnit } from "@/lib/challenges";
 import type { Series } from "./chart-colors";
 import {
   CHART_HEIGHT,
@@ -39,11 +39,13 @@ type Row = Record<string, number>;
 // the current period, with the y-axis on the right so it stays in view there.
 export function PeriodChart({
   series,
+  unit,
   periods,
   periodUnit,
   timeZone,
 }: {
   series: Series[];
+  unit: PointUnit;
   periods: PeriodTotals[];
   periodUnit: PeriodUnit;
   timeZone: string;
@@ -80,7 +82,7 @@ export function PeriodChart({
       ref={scrollRef}
       tabIndex={0}
       role="img"
-      aria-label="Bar chart of each player's points per period. The current period is the last one. The standings below list the current period's points."
+      aria-label={`Bar chart of each player's ${unit.plural} per period. The current period is the last one. The standings below list the current period's ${unit.plural}.`}
       className="overflow-x-auto overscroll-x-contain rounded-md focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
     >
       {/* Clipped because the chart measures its width rounded up; a fraction of

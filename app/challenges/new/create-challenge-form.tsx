@@ -2,24 +2,36 @@
 
 import Link from "next/link";
 import { useActionState, useState, useSyncExternalStore } from "react";
+import { capitalize } from "@/app/point-unit";
 import { Spinner } from "@/app/spinner";
 import { inputClass, primaryButtonClass, secondaryButtonClass } from "@/app/ui-classes";
 import { createChallengeAction, type CreateChallengeState } from "./actions";
 import { ParticipantPicker, type Participant } from "./participant-picker";
 
-// Mirrors NAME_MAX / DESCRIPTION_MAX / PERIOD_COUNT_MAX in lib/challenges.ts
-// (server-only).
+// Mirrors NAME_MAX / DESCRIPTION_MAX / PERIOD_COUNT_MAX / UNIT_MAX in
+// lib/challenges.ts (server-only).
 const NAME_MAX = 100;
 const DESCRIPTION_MAX = 2000;
 const PERIOD_COUNT_MAX = 12;
+const UNIT_MAX = 20;
 
 type Kind = "fixed" | "periodic";
 type PeriodUnit = "week" | "month";
+type UnitKind = "points" | "custom";
 
-const KIND_OPTIONS: { value: Kind; label: string; hint: string }[] = [
-  { value: "fixed", label: "Fixed end", hint: "Most points at the end wins" },
-  { value: "periodic", label: "Recurring", hint: "Points reset every period" },
+// Hints use the unit being defined, e.g. "Most minutes at the end wins".
+const KIND_OPTIONS: { value: Kind; label: string; hint: (plural: string) => string }[] = [
+  { value: "fixed", label: "Fixed end", hint: (plural) => `Most ${plural} at the end wins` },
+  { value: "periodic", label: "Recurring", hint: (plural) => `${capitalize(plural)} reset every period` },
 ];
+
+const UNIT_OPTIONS: { value: UnitKind; label: string; hint: string }[] = [
+  { value: "points", label: "Points", hint: "The default" },
+  { value: "custom", label: "Custom", hint: "e.g. minutes" },
+];
+
+const toggleButtonClass =
+  "flex min-h-11 min-w-0 cursor-pointer flex-col justify-center gap-0.5 rounded-lg border border-foreground/20 bg-surface px-3 py-2 text-left transition hover:scale-98 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none aria-pressed:border-primary aria-pressed:ring-2 aria-pressed:ring-primary/40";
 
 // Today's date (YYYY-MM-DD) and the IANA time zone in the browser; undefined
 // during SSR, where the viewer's time zone isn't known.
@@ -51,6 +63,9 @@ export function CreateChallengeForm() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<Kind>("fixed");
+  const [unitKind, setUnitKind] = useState<UnitKind>("points");
+  const [unitPlural, setUnitPlural] = useState("");
+  const [unitSingular, setUnitSingular] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("23:59");
   const [periodCount, setPeriodCount] = useState("1");
@@ -59,6 +74,7 @@ export function CreateChallengeForm() {
   const today = useSyncExternalStore(noopSubscribe, localToday, () => undefined);
   const timeZone = useSyncExternalStore(noopSubscribe, localTimeZone, () => undefined);
   const plural = periodCount.trim() !== "1";
+  const hintPlural = (unitKind === "custom" && unitPlural.trim().toLowerCase()) || "points";
 
   const errors = state.errors ?? {};
 
@@ -117,10 +133,10 @@ export function CreateChallengeForm() {
               type="button"
               aria-pressed={kind === o.value}
               onClick={() => setKind(o.value)}
-              className="flex min-h-11 min-w-0 cursor-pointer flex-col justify-center gap-0.5 rounded-lg border border-foreground/20 bg-surface px-3 py-2 text-left transition hover:scale-98 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none aria-pressed:border-primary aria-pressed:ring-2 aria-pressed:ring-primary/40"
+              className={toggleButtonClass}
             >
               <span className="text-base font-semibold">{o.label}</span>
-              <span className="text-sm text-foreground/70">{o.hint}</span>
+              <span className="text-sm break-words text-foreground/70">{o.hint(hintPlural)}</span>
             </button>
           ))}
         </div>
@@ -204,6 +220,61 @@ export function CreateChallengeForm() {
           <FieldError message={errors.period} />
         </fieldset>
       )}
+
+      {/* Same toggle-plus-hidden-input pattern as the type above. */}
+      <fieldset className="flex min-w-0 flex-col gap-1.5">
+        <legend className="mb-1.5 text-sm font-medium">Unit</legend>
+        <div className="grid grid-cols-2 gap-3">
+          {UNIT_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={unitKind === o.value}
+              onClick={() => setUnitKind(o.value)}
+              className={toggleButtonClass}
+            >
+              <span className="text-base font-semibold">{o.label}</span>
+              <span className="text-sm text-foreground/70">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+        <input type="hidden" name="unitKind" value={unitKind} />
+        {unitKind === "custom" && (
+          <div className="mt-1.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-sm text-foreground/70">Plural</span>
+              <input
+                name="unitPlural"
+                type="text"
+                required
+                autoComplete="off"
+                maxLength={UNIT_MAX}
+                placeholder="minutes"
+                value={unitPlural}
+                onChange={(e) => setUnitPlural(e.target.value)}
+                aria-invalid={!!errors.unit}
+                className={inputClass}
+              />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-sm text-foreground/70">Singular</span>
+              <input
+                name="unitSingular"
+                type="text"
+                required
+                autoComplete="off"
+                maxLength={UNIT_MAX}
+                placeholder="minute"
+                value={unitSingular}
+                onChange={(e) => setUnitSingular(e.target.value)}
+                aria-invalid={!!errors.unit}
+                className={inputClass}
+              />
+            </label>
+          </div>
+        )}
+        <FieldError message={errors.unit} />
+      </fieldset>
 
       <ParticipantPicker selected={participants} onChange={setParticipants} error={errors.participants} />
 

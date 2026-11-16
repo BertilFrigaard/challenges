@@ -9,7 +9,15 @@ import { deleteChallengeAction } from "./actions";
 // challenge is never deleted by a reflexive tap.
 const LOCK_SECONDS = 10;
 
-export function DeleteChallenge({ challengeId, challengeName }: { challengeId: string; challengeName: string }) {
+export function DeleteChallenge({
+  challengeId,
+  challengeName,
+  unitPlural,
+}: {
+  challengeId: string;
+  challengeName: string;
+  unitPlural: string;
+}) {
   // A new session per open remounts the dialog, so the countdown restarts.
   const [session, setSession] = useState<number | null>(null);
 
@@ -27,6 +35,7 @@ export function DeleteChallenge({ challengeId, challengeName }: { challengeId: s
           key={session}
           challengeId={challengeId}
           challengeName={challengeName}
+          unitPlural={unitPlural}
           onClosed={() => setSession(null)}
         />
       )}
@@ -37,10 +46,12 @@ export function DeleteChallenge({ challengeId, challengeName }: { challengeId: s
 function DeleteDialog({
   challengeId,
   challengeName,
+  unitPlural,
   onClosed,
 }: {
   challengeId: string;
   challengeName: string;
+  unitPlural: string;
   onClosed: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -98,7 +109,7 @@ function DeleteDialog({
         </h2>
         <div id="delete-description" className="flex flex-col gap-3 text-base text-foreground/85">
           <p>
-            This permanently removes the challenge and every participant&apos;s points. It can&apos;t be
+            This permanently removes the challenge and every participant&apos;s {unitPlural}. It can&apos;t be
             undone.
           </p>
           <p className="rounded-lg bg-surface px-3 py-2">
