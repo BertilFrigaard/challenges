@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { logout } from "@/app/actions";
 import { AddPointsButton, AddPointsProvider } from "@/app/add-points";
+import { Countdown } from "@/app/countdown";
 import { LocalTime } from "@/app/local-time";
 import { LogoutButton } from "@/app/logout-button";
-import { periodLabel } from "@/app/period-label";
 import { primaryButtonClass } from "@/app/ui-classes";
 import type { User } from "@/lib/auth";
 import { getChallengesForUser, type ChallengeSummary } from "@/lib/challenges";
@@ -97,38 +97,47 @@ function ChallengeCard({ challenge: c }: { challenge: ChallengeSummary }) {
         </h3>
         {!isEnded(c) && <AddPointsButton challengeId={c.id} challengeName={c.name} />}
       </div>
-      {c.description && (
-        <p className="line-clamp-3 text-sm break-words whitespace-pre-line text-foreground/80">
-          {c.description}
-        </p>
-      )}
-      <dl className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-1 text-sm text-foreground/70">
-        {c.kind === "fixed" ? (
-          <div className="flex gap-1">
-            <dt>{c.ended ? "Ended" : "Ends"}</dt>
-            <dd className="font-medium text-foreground">
+      <p className="text-base font-semibold break-words tabular-nums">{standingText(c)}</p>
+      <p className="mt-auto pt-1 text-sm text-foreground/70">
+        {c.kind === "periodic" ? (
+          <>
+            Resets in{" "}
+            <span className="font-medium text-foreground">
+              <Countdown to={c.periodEndsAt} />
+            </span>
+          </>
+        ) : c.ended ? (
+          <>
+            Ended{" "}
+            <span className="font-medium text-foreground">
               <LocalTime iso={c.endsAt} />
-            </dd>
-          </div>
+            </span>
+          </>
         ) : (
-          <div className="flex gap-1">
-            <dt>Resets</dt>
-            <dd className="font-medium text-foreground">
-              {periodLabel(c.periodUnit, c.periodCount)}
-            </dd>
-          </div>
+          <>
+            Ends in{" "}
+            <span className="font-medium text-foreground">
+              <Countdown to={c.endsAt} />
+            </span>
+          </>
         )}
-        <div className="flex gap-1">
-          <dt className="sr-only">Participants</dt>
-          <dd>
-            {c.participantCount} {c.participantCount === 1 ? "participant" : "participants"}
-          </dd>
-        </div>
-        <div className="flex min-w-0 gap-1">
-          <dt>by</dt>
-          <dd className="truncate">{c.isCreator ? "you" : c.creatorUsername}</dd>
-        </div>
-      </dl>
+      </p>
     </article>
   );
+}
+
+// "Tied 2nd of 5 · 120 pts", or "Finished 2nd of 5 · 120 pts" once ended.
+function standingText(c: ChallengeSummary): string {
+  const ended = isEnded(c);
+  if (!c.anyoneScored) return ended ? "No points scored" : "No points yet";
+  const tied = c.tied ? (ended ? "tied " : "Tied ") : "";
+  const points = `${c.myPoints.toLocaleString("en-US")} ${Math.abs(c.myPoints) === 1 ? "pt" : "pts"}`;
+  return `${ended ? "Finished " : ""}${tied}${ordinal(c.place)} of ${c.participantCount} · ${points}`;
+}
+
+// 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st…
+function ordinal(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  return n + (["th", "st", "nd", "rd"][n % 10] ?? "th");
 }

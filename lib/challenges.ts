@@ -16,16 +16,21 @@ export type ChallengeSchedule =
   | { kind: "fixed"; endsAt: Date }
   | { kind: "periodic"; unit: PeriodUnit; count: number; timeZone: string };
 
+// A challenge as listed on the home screen, with how the user stands in it:
+// overall for a fixed challenge, in the current period for a periodic one.
 export type ChallengeSummary = {
   id: string;
   name: string;
-  description: string;
-  creatorUsername: string;
-  isCreator: boolean;
   participantCount: number;
+  myPoints: number;
+  // Ties share a place (1, 2, 2, 4), like the standings on the challenge page.
+  place: number;
+  tied: boolean;
+  // False while every participant is still at 0 points.
+  anyoneScored: boolean;
 } & (
   | { kind: "fixed"; endsAt: string /* ISO 8601 */; ended: boolean }
-  | { kind: "periodic"; periodUnit: PeriodUnit; periodCount: number }
+  | { kind: "periodic"; periodEndsAt: string /* ISO 8601 */ }
 );
 
 export type UserMatch = { id: string; username: string };
@@ -117,38 +122,91 @@ export async function createChallenge(input: {
   }
 }
 
-// Every challenge the user takes part in. Active ones come first: fixed ones
-// ending soonest, then periodic ones (newest first), which never end. Ended
-// fixed ones come last, most recently ended first.
+// SQL for the index k of the period containing now, for a periodic challenge
+// row aliased `c`. Period k starts at (period_anchor + k * period_count units)
+// 00:00 in the challenge's time zone (see db/schema.sql).
+function currentPeriodIndexSql(c: string): string {
+  const today = `(now() AT TIME ZONE ${c}.time_zone)::date`;
+  return `GREATEST(0, CASE ${c}.period_unit
+            WHEN 'week' THEN floor((${today} - ${c}.period_anchor) / (7.0 * ${c}.period_count))
+            ELSE floor(((extract(year FROM ${today}) - extract(year FROM ${c}.period_anchor)) * 12
+                        + extract(month FROM ${today}) - extract(month FROM ${c}.period_anchor))
+                       / ${c}.period_count)
+          END)::int`;
+}
+
+// SQL for the instant period `k` (an SQL expression) of challenge row `c` starts.
+function periodStartSql(c: string, k: string): string {
+  return `((${c}.period_anchor + CASE ${c}.period_unit
+             WHEN 'week' THEN make_interval(weeks => (${k}) * ${c}.period_count)
+             ELSE make_interval(months => (${k}) * ${c}.period_count)
+           END) AT TIME ZONE ${c}.time_zone)`;
+}
+
+// Every challenge the user takes part in, with their points and place. Active
+// ones come first: fixed ones ending soonest, then periodic ones (newest
+// first), which never end. Ended fixed ones come last, most recently ended
+// first.
 export async function getChallengesForUser(userId: string): Promise<ChallengeSummary[]> {
   const { rows } = await pool.query<{
     id: string;
     name: string;
-    description: string;
     kind: "fixed" | "periodic";
     ends_at: Date | null;
-    period_unit: PeriodUnit | null;
-    period_count: number | null;
-    creator_username: string;
-    is_creator: boolean;
-    participant_count: number;
+    period_end: Date | null;
     ended: boolean;
+    my_points: number;
+    place: number;
+    tied: boolean;
+    participant_count: number;
+    anyone_scored: boolean;
   }>(
-    `SELECT c.id, c.name, c.description, c.kind, c.ends_at,
-            c.period_unit, c.period_count,
-            u.username AS creator_username,
-            c.creator_id = $1 AS is_creator,
-            (SELECT count(*)::int FROM challenge_participants p WHERE p.challenge_id = c.id)
-              AS participant_count,
-            (c.kind = 'fixed' AND c.ends_at <= now()) AS ended
-       FROM challenge_participants me
-       JOIN challenges c ON c.id = me.challenge_id
-       JOIN users u ON u.id = c.creator_id
-      WHERE me.user_id = $1
-      ORDER BY ended,
-               CASE WHEN c.ends_at > now() THEN c.ends_at END ASC NULLS LAST,
-               c.ends_at DESC,
-               c.created_at DESC`,
+    // Points count up to the end of a fixed challenge (as in getRunningTotals),
+    // or within the current period of a periodic one. Every participant is
+    // ranked, including those without points.
+    `WITH mine AS (
+       SELECT c.id, c.name, c.kind, c.ends_at, c.created_at,
+              (c.kind = 'fixed' AND c.ends_at <= now()) AS ended,
+              w.period_start, w.period_end
+         FROM challenge_participants me
+         JOIN challenges c ON c.id = me.challenge_id
+         -- The current period; no row (so nulls) for a fixed challenge.
+         LEFT JOIN LATERAL (
+           SELECT ${periodStartSql("c", "cur.k")} AS period_start,
+                  ${periodStartSql("c", "cur.k + 1")} AS period_end
+             FROM (SELECT ${currentPeriodIndexSql("c")} AS k) cur
+            WHERE c.kind = 'periodic'
+         ) w ON true
+        WHERE me.user_id = $1
+     ),
+     scores AS (
+       SELECT m.id AS challenge_id, p.user_id, COALESCE(sum(e.delta), 0)::float8 AS total
+         FROM mine m
+         JOIN challenge_participants p ON p.challenge_id = m.id
+         LEFT JOIN point_entries e
+           ON e.challenge_id = p.challenge_id AND e.user_id = p.user_id
+          AND CASE m.kind
+                WHEN 'fixed' THEN e.created_at <= LEAST(now(), m.ends_at)
+                ELSE e.created_at >= m.period_start AND e.created_at < m.period_end
+              END
+        GROUP BY m.id, p.user_id
+     ),
+     ranked AS (
+       SELECT challenge_id, user_id, total,
+              rank() OVER (PARTITION BY challenge_id ORDER BY total DESC)::int AS place,
+              count(*) OVER (PARTITION BY challenge_id, total) > 1 AS tied,
+              count(*) OVER (PARTITION BY challenge_id)::int AS participant_count,
+              bool_or(total <> 0) OVER (PARTITION BY challenge_id) AS anyone_scored
+         FROM scores
+     )
+     SELECT m.id, m.name, m.kind, m.ends_at, m.period_end, m.ended,
+            r.total AS my_points, r.place, r.tied, r.participant_count, r.anyone_scored
+       FROM mine m
+       JOIN ranked r ON r.challenge_id = m.id AND r.user_id = $1
+      ORDER BY m.ended,
+               CASE WHEN m.ends_at > now() THEN m.ends_at END ASC NULLS LAST,
+               m.ends_at DESC,
+               m.created_at DESC`,
     [userId],
   );
 
@@ -156,14 +214,15 @@ export async function getChallengesForUser(userId: string): Promise<ChallengeSum
     const common = {
       id: r.id,
       name: r.name,
-      description: r.description,
-      creatorUsername: r.creator_username,
-      isCreator: r.is_creator,
       participantCount: r.participant_count,
+      myPoints: r.my_points,
+      place: r.place,
+      tied: r.tied,
+      anyoneScored: r.anyone_scored,
     };
     return r.kind === "fixed"
       ? { ...common, kind: "fixed", endsAt: r.ends_at!.toISOString(), ended: r.ended }
-      : { ...common, kind: "periodic", periodUnit: r.period_unit!, periodCount: r.period_count! };
+      : { ...common, kind: "periodic", periodEndsAt: r.period_end!.toISOString() };
   });
 }
 
@@ -263,10 +322,8 @@ async function getRunningTotals(challengeId: string, endsAt: Date): Promise<Runn
   return rows.map((r) => ({ userId: r.user_id, at: r.created_at.toISOString(), total: r.total }));
 }
 
-// Each period of a periodic challenge from the first to the current one, with
-// the points per participant in it. Period k starts at
-// (period_anchor + k * period_count units) 00:00 in the challenge's time zone
-// (see db/schema.sql); the current one is the one containing now.
+// Each period of a periodic challenge from the first to the current one (the
+// one containing now), with the points per participant in it.
 async function getPeriodTotals(challengeId: string): Promise<PeriodTotals[]> {
   const { rows } = await pool.query<{
     k: number;
@@ -276,30 +333,17 @@ async function getPeriodTotals(challengeId: string): Promise<PeriodTotals[]> {
     total: number | null;
   }>(
     `WITH c AS (
-       SELECT period_anchor, period_unit, period_count, time_zone,
-              (now() AT TIME ZONE time_zone)::date AS today
+       SELECT period_anchor, period_unit, period_count, time_zone
          FROM challenges
         WHERE id = $1
      ),
      cur AS (
-       SELECT GREATEST(0, CASE c.period_unit
-                WHEN 'week' THEN floor((c.today - c.period_anchor) / (7.0 * c.period_count))
-                ELSE floor(((extract(year FROM c.today) - extract(year FROM c.period_anchor)) * 12
-                            + extract(month FROM c.today) - extract(month FROM c.period_anchor))
-                           / c.period_count)
-              END)::int AS current_k
-         FROM c
+       SELECT ${currentPeriodIndexSql("c")} AS current_k FROM c
      ),
      periods AS (
        SELECT k,
-              (c.period_anchor + CASE c.period_unit
-                 WHEN 'week' THEN make_interval(weeks => k * c.period_count)
-                 ELSE make_interval(months => k * c.period_count)
-               END) AT TIME ZONE c.time_zone AS starts_at,
-              (c.period_anchor + CASE c.period_unit
-                 WHEN 'week' THEN make_interval(weeks => (k + 1) * c.period_count)
-                 ELSE make_interval(months => (k + 1) * c.period_count)
-               END) AT TIME ZONE c.time_zone AS ends_at
+              ${periodStartSql("c", "k")} AS starts_at,
+              ${periodStartSql("c", "k + 1")} AS ends_at
          FROM c, cur, generate_series(0, cur.current_k) AS s(k)
      )
      SELECT p.k, p.starts_at, p.ends_at, e.user_id, sum(e.delta)::float8 AS total
