@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { logout } from "@/app/actions";
+import { AddPointsButton, AddPointsProvider } from "@/app/add-points";
 import { LocalTime } from "@/app/local-time";
 import { LogoutButton } from "@/app/logout-button";
+import { periodLabel } from "@/app/period-label";
 import { primaryButtonClass } from "@/app/ui-classes";
 import type { User } from "@/lib/auth";
 import { getChallengesForUser, type ChallengeSummary } from "@/lib/challenges";
@@ -34,10 +36,10 @@ export async function HomeScreen({ user }: { user: User }) {
           You&apos;re not in any challenges yet. Create one and invite some people.
         </p>
       ) : (
-        <>
+        <AddPointsProvider challenges={active.map(({ id, name }) => ({ id, name }))}>
           <ChallengeSection title="Active" challenges={active} empty="No active challenges." />
           {ended.length > 0 && <ChallengeSection title="Ended" challenges={ended} />}
-        </>
+        </AddPointsProvider>
       )}
     </section>
   );
@@ -77,17 +79,24 @@ function isEnded(c: ChallengeSummary): boolean {
   return c.kind === "fixed" && c.ended;
 }
 
-// "every week", "every 2 weeks", "every month", "every 3 months".
-function periodLabel(unit: "week" | "month", count: number): string {
-  return count === 1 ? `every ${unit}` : `every ${count} ${unit}s`;
-}
-
 function ChallengeCard({ challenge: c }: { challenge: ChallengeSummary }) {
   return (
     <article
-      className={`flex h-full min-w-0 flex-col gap-2 rounded-lg border border-foreground/10 bg-surface p-4 ${isEnded(c) ? "opacity-75" : ""}`}
+      className={`relative flex h-full min-w-0 cursor-pointer flex-col gap-2 rounded-lg border border-foreground/10 bg-surface p-4 transition hover:scale-98 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-primary/40 ${isEnded(c) ? "opacity-75" : ""}`}
     >
-      <h3 className="min-w-0 text-base font-semibold break-words">{c.name}</h3>
+      <div className="flex items-start gap-3">
+        <h3 className="min-w-0 flex-1 text-base font-semibold break-words">
+          {/* Stretched over the whole card, so the card is the link; the add
+              button sits above it. */}
+          <Link
+            href={`/challenges/${c.id}`}
+            className="outline-none after:absolute after:inset-0 after:rounded-lg"
+          >
+            {c.name}
+          </Link>
+        </h3>
+        {!isEnded(c) && <AddPointsButton challengeId={c.id} challengeName={c.name} />}
+      </div>
       {c.description && (
         <p className="line-clamp-3 text-sm break-words whitespace-pre-line text-foreground/80">
           {c.description}

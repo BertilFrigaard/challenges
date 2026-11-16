@@ -9,3 +9,7 @@ const buttonBase =
 export const primaryButtonClass = `${buttonBase} bg-primary text-background`;
 
 export const secondaryButtonClass = `${buttonBase} border border-foreground/20 bg-transparent text-foreground`;
+
+// For destructive actions: outlined in the error color rather than filled, so
+// it never looks like the main action.
+export const dangerButtonClass = `${buttonBase} border border-error/60 bg-transparent text-error`;

@@ -15,6 +15,20 @@
   --warning: #d97706;
   --error: #dc2626;
   --info: #2563eb;
+
+  /* Chart series in fixed slot order: this order keeps neighbouring colors
+     apart for colorblind viewers, so assign slots in order, never shuffled. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
+  --series-other: #a3aca8;
+  --chart-grid: #ccd5d1;
+  --chart-axis: #56615c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,6 +42,18 @@
     --warning: #fbbf24;
     --error: #f87171;
     --info: #60a5fa;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #0ca30c;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #535c58;
+    --chart-grid: #333b38;
+    --chart-axis: #9ba8a2;
   }
 }
 
